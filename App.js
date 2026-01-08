@@ -6,13 +6,14 @@ import * as Speech from 'expo-speech';
 
 export default function App() {
   const [isTtsEnabled, setIsTtsEnabled] = useState(true);
+  const [currentUrl, setCurrentUrl] = useState('https://mword.etoos.com/main');
   const webViewRef = useRef(null);
 
   // Custom JavaScript to be injected into the WebView
+  // Note: Avoid single-line comments in the injected string to prevent parsing issues
   const injectedJavaScript = `
     (function() {
-      // 1. Persistent Login Cookie Strategy
-      // Attempt to extend the expiration of all cookies every minute
+      /* 1. Persistent Login Cookie Strategy */
       setInterval(function() {
         try {
           var cookies = document.cookie.split(";");
@@ -21,32 +22,25 @@ export default function App() {
             var eqPos = cookie.indexOf("=");
             var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
             var value = eqPos > -1 ? cookie.substr(eqPos + 1) : "";
-            // Re-set with 1 year expiration
             document.cookie = name + "=" + value + "; path=/; max-age=31536000";
           }
         } catch(e) {}
       }, 60000);
 
-      // 2. Long Press (3s) to Reveal Korean Text
-      // Target: .sentenceBox.long .ko
-      // Logic: Add touch listeners to start/clear timeout
+      /* 2. Long Press (3s) to Reveal Korean Text */
       function attachLongPressListeners() {
         var targets = document.querySelectorAll('.sentenceBox.long .ko');
         targets.forEach(function(target) {
             if (target.getAttribute('data-long-press-attached')) return;
             target.setAttribute('data-long-press-attached', 'true');
 
-            // Ensure text is initially hidden (using color transparent or visibility hidden)
-            // Assuming the site hides it or we force it. 
-            // If the site has it visible by default, we hide it.
-            // Let's assume we need to force hide it initially if it's "Fill-in-the-blank".
-            // target.style.opacity = '0'; // Only if we want to enforce hiding
+            /* Force hidden initially if needed, usually CSS handles this */
+            /* target.style.opacity = '0'; */
 
             var pressTimer;
             
             target.addEventListener('touchstart', function() {
                 pressTimer = setTimeout(function() {
-                    // Reveal logic: Change color to black or opacity to 1
                     target.style.color = 'black'; 
                     target.style.opacity = '1';
                     target.style.visibility = 'visible';
@@ -55,16 +49,9 @@ export default function App() {
 
             target.addEventListener('touchend', function() {
                 clearTimeout(pressTimer);
-                // Optional: Hide again? User said "see", possibly meaning peek.
-                // Leaving it visible is safer for "studying", but usually peek mechanics hide on release.
-                // However user said "long press to see", implying it helps while held.
-                // Let's making it a "Peek" (hide on release) for strict testing?
-                // Or just reveal? "보게 해 줄 수 있어" -> "allow me to see".
-                // I'll make it reset on release to strictly follow "press to see".
-                target.style.color = 'transparent'; // Reset to hidden
+                target.style.color = 'transparent'; 
             });
             
-            // Also handle click/mousedown for desktop testing
              target.addEventListener('mousedown', function() {
                 pressTimer = setTimeout(function() {
                     target.style.color = 'black'; 
@@ -79,39 +66,36 @@ export default function App() {
         });
       }
 
-      // 3. TTS Trigger (Mutation Observer)
-      // Watch for appearance of .sentenceBox.long .en or .wordBox and speak content
+      /* 3. TTS Trigger (Mutation Observer) */
       var observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-          if (mutation.addedNodes.length) {
-             // Check for new English text nodes
-             var enText = "";
-             
-             // Check .sentenceBox.long .en
-             var sentenceBox = document.querySelector('.sentenceBox.long .en');
-             if (sentenceBox && sentenceBox.innerText && sentenceBox.innerText !== window.lastReadSentence) {
-                enText = sentenceBox.innerText;
-                window.lastReadSentence = enText;
-             }
+        /* Check text content changes regardless of mutation type */
+         var enText = "";
+         
+         /* Check .sentenceBox.long .en */
+         var sentenceBox = document.querySelector('.sentenceBox.long .en');
+         if (sentenceBox && sentenceBox.innerText && sentenceBox.innerText.trim() !== window.lastReadSentence) {
+            enText = sentenceBox.innerText.trim();
+            window.lastReadSentence = enText;
+         }
 
-             // Check .wordBox (simple word test)
-             var wordBox = document.querySelector('.wordBox .en'); // Adjust selector as needed
-             if (!enText && wordBox && wordBox.innerText && wordBox.innerText !== window.lastReadWord) {
-                 enText = wordBox.innerText;
-                 window.lastReadWord = enText;
-             }
-             
-             if (enText) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SPEAK', text: enText }));
-             }
-          }
-        });
+         /* Check .wordBox */
+         var wordBox = document.querySelector('.wordBox span'); 
+         /* Fallback for wordBox if span structure varies */
+         if (!wordBox) wordBox = document.querySelector('.wordBox');
+
+         if (!enText && wordBox && wordBox.innerText && wordBox.innerText.trim() !== window.lastReadWord) {
+             enText = wordBox.innerText.trim();
+             window.lastReadWord = enText;
+         }
+         
+         if (enText && enText.length > 0) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SPEAK', text: enText }));
+         }
       });
       
-      observer.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
       
-      // Run once on load just in case
-      setInterval(attachLongPressListeners, 1000); // Poll for new elements (dynamic loading)
+      setInterval(attachLongPressListeners, 1000);
       
     })();
     true;
@@ -121,6 +105,8 @@ export default function App() {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'SPEAK' && isTtsEnabled) {
+        // Stop any currently speaking audio to play the new one immediately
+        Speech.stop();
         Speech.speak(data.text, { language: 'en' });
       }
     } catch (e) {
@@ -131,31 +117,39 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
-      {/* Top Banner */}
-      <View style={styles.banner}>
-        <Text style={styles.bannerText}>영단태+ 앱으로 접속 중</Text>
-      </View>
 
-      <WebView 
+      {/* Top Banner */}
+      {/* Top Banner - Only show on main page */}
+      {currentUrl === 'https://mword.etoos.com/main' && (
+        <View style={styles.banner}>
+          <Text style={styles.bannerText}>영단태+ 앱으로 접속 중 (Unofficial-APP)</Text>
+        </View>
+      )}
+
+      <WebView
         ref={webViewRef}
-        source={{ uri: 'https://mword.etoos.com/main' }} 
+        source={{ uri: 'https://mword.etoos.com/main' }}
         style={styles.webview}
-        scalesPageToFit={true} 
+        scalesPageToFit={true}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         injectedJavaScript={injectedJavaScript}
         onMessage={handleMessage}
-        sharedCookiesEnabled={true} // Important for persistence attempts
+        onNavigationStateChange={(navState) => setCurrentUrl(navState.url)}
+        sharedCookiesEnabled={true}
+        // Google Login Fix: Use a standard browser UserAgent
+        userAgent="Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
       />
 
-      {/* TTS Toggle FAB */}
-      <TouchableOpacity 
-        style={[styles.fab, isTtsEnabled ? styles.fabOn : styles.fabOff]} 
-        onPress={() => setIsTtsEnabled(!isTtsEnabled)}
-      >
-        <Text style={styles.fabText}>{isTtsEnabled ? 'TTS ON' : 'TTS OFF'}</Text>
-      </TouchableOpacity>
+      {/* TTS Toggle FAB - Only show on Test page */}
+      {currentUrl && currentUrl.includes('/testlist/teststart') && (
+        <TouchableOpacity
+          style={[styles.fab, isTtsEnabled ? styles.fabOn : styles.fabOff]}
+          onPress={() => setIsTtsEnabled(!isTtsEnabled)}
+        >
+          <Text style={styles.fabText}>{isTtsEnabled ? 'TTS ON' : 'TTS OFF'}</Text>
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -178,7 +172,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   webview: {
-    flex: 1, 
+    flex: 1,
   },
   fab: {
     position: 'absolute',
