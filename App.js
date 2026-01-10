@@ -126,8 +126,18 @@ export default function App() {
 
   const handleShouldStartLoadWithRequest = (request) => {
     const { url } = request;
-    // Allow main domain and login domain
-    if (url.startsWith('https://mword.etoos.com') || url.startsWith('https://member.etoos.com')) {
+    // Allow main domain, login domains, and OAuth providers
+    const allowedDomains = [
+      'etoos.com',
+      'apple.com',
+      'naver.com',
+      'google.com',
+      'kakao.com'
+    ];
+
+    const isAllowed = allowedDomains.some(domain => url.includes(domain));
+
+    if (isAllowed) {
       return true;
     }
 
@@ -179,6 +189,20 @@ export default function App() {
             <Text style={styles.fabText}>{isTtsEnabled ? 'TTS ON' : 'TTS OFF'}</Text>
           </TouchableOpacity>
         </>
+      )}
+
+      {/* Return to Main Button - Only on generic Etoos pages */}
+      {currentUrl && currentUrl.includes('m.etoos.com') && !currentUrl.includes('mword.etoos.com') && (
+        <TouchableOpacity
+          style={[styles.fab, styles.fabCenter]}
+          onPress={() => {
+            if (webViewRef.current) {
+              webViewRef.current.injectJavaScript("window.location.href = 'https://mword.etoos.com/main'; true;");
+            }
+          }}
+        >
+          <Text style={styles.fabText}>메인으로 돌아가기</Text>
+        </TouchableOpacity>
       )}
     </SafeAreaView>
   );
@@ -234,6 +258,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 12,
-  }
+  },
+  fabCenter: {
+    alignSelf: 'center',
+    bottom: 70, // Same level as others
+    width: 120, // Slightly wider for text
+    backgroundColor: '#FF7675', // Different color (Reddish)
+  },
 });
 
