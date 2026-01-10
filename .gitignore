@@ -43,6 +43,11 @@ Desktop.ini
 *.tsbuildinfo
 
 # Ignore standard native folders (if using Managed Workflow)
-# If you prebuild, you might want to remove these lines to track native code
-/ios
-/android
+# Build artifacts
+*.apk
+*.aab
+*.apks
+
+# EAS
+.eas/
+
