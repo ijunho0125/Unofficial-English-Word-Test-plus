@@ -2,7 +2,7 @@
   "expo": {
     "name": "English Word Test+",
     "slug": "english-word-test-plus",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon1.png",
     "userInterfaceStyle": "light",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "student.ijunho0125.englishwordtestplus",
-      "buildNumber": "1.0.0",
+      "buildNumber": "1.0.3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -26,7 +26,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "student.ijunho0125.englishwordtestplus",
-      "versionCode": 1,
+      "versionCode": 3,
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -42,6 +42,16 @@
     },
     "updates": {
       "url": "https://u.expo.dev/0f2b0bbc-a906-4e0e-bbe9-ce7495875070"
-    }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ]
   }
 }
