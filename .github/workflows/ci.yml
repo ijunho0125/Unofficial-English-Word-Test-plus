@@ -2,30 +2,46 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main  # main 브랜치에 푸시될 때 실행 (원하는 대로 수정)
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # GitHub에서 제공하는 리눅스 환경 (Android SDK 포함됨)
+
     steps:
       - name: 🏗 Setup repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: 🏗 Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: 20
-          cache: npm
+          node-version: 18 # 프로젝트에 맞는 버전 사용
+          cache: 'npm' # or 'yarn'
 
-      - name: 🏗 Setup Expo and EAS
-        uses: expo/expo-github-action@v8
+      - name: 🏗 Setup Java
+        uses: actions/setup-java@v3
         with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          distribution: 'temurin'
+          java-version: '17' # React Native 최신 버전은 보통 17 필요
 
       - name: 📦 Install dependencies
         run: npm install
 
-      - name: 🚀 Build APK
-        run: eas build --platform android --profile production --non-interactive
+      - name: 🚀 Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: 👷 Build APK (Local Build on Runner)
+        # 중요: --local 옵션을 써야 Expo 클라우드를 안 쓰고 GitHub 서버 자원을 씁니다.
+        # --non-interactive: CI 환경이라 사람이 입력을 못 하므로 필수
+        run: eas build --platform android --profile preview --local --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 📤 Upload APK to GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: android/app/build/outputs/apk/release/app-release.apk
+          # 위 경로는 프로젝트 설정에 따라 다를 수 있습니다. 
+          # 보통 eas build --local 결과물은 프로젝트 루트에 생기거나 build 폴더 안을 확인해야 합니다.
