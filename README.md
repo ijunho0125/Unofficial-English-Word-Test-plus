@@ -1,6 +1,5 @@
 # English Word Test+ (Unofficial)
-![CI](https://github.com/ijunho0125/Unofficial-English-Word-Test-plus/actions/workflows/ci.yml/badge.svg)
-<img src ="./assets/icon1.png" width="100">
+<img src ="./assets/icon1.png">
 
 > **⚠️ Disclaimer (필독)**
 > 이 프로젝트는 개인 학습 및 편의를 위해 제작된 **비공식(Unofficial)** 앱입니다.
