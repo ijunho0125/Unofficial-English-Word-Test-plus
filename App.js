@@ -36,11 +36,9 @@ const INJECTED_JAVASCRIPT = `
 
     // 2. Korean Visibility Styles
     var style = document.createElement('style');
-    style.innerHTML = \`
-    .sentenceBox.long .ko { opacity: 0 !important; transition: opacity 0.3s; }
-    body.show-korean-always .sentenceBox.long .ko { opacity: 1 !important; }
-  \`;
-  document.head.appendChild(style);
+    style.innerHTML = '.sentenceBox.long .ko { opacity: 0 !important; transition: opacity 0.3s; } ' +
+                      'body.show-korean-always .sentenceBox.long .ko { opacity: 1 !important; }';
+    document.head.appendChild(style);
 
   // 2. TTS Logic & Debounce
   var lastReadText = "";
