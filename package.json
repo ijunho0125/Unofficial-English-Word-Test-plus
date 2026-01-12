@@ -25,5 +25,8 @@
     "@react-native/metro-config": "^0.83.1",
     "eas-cli": "^16.28.0"
   },
+  "engines": {
+    "node": ">=20.19.4"
+  },
   "private": true
 }
