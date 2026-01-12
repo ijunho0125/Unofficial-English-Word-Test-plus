@@ -10,28 +10,33 @@ import * as Speech from 'expo-speech';
 // SafeAreaContext를 이용해 노치·네비게이션 바와 겹치지 않게 함
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Optimized Injected JavaScript (Defined outside component)
+// WebView에 주입되는 JavaScript 코드
+// - 쿠키를 1일 동안 유지
+// - 한글 문장 표시/숨김 토글 스타일 적용
+// - TTS를 위한 텍스트 추출 및 디바운스 처리
+// - DOM 변화를 감지해 자동 TTS 실행
+// - 버튼 클릭 시 안전하게 텍스트 재읽기
 const INJECTED_JAVASCRIPT = `
-(function() {
-  // 1. Cookie Persistence (1 Day)
-  function extendCookies() {
-    try {
-      var cookies = document.cookie.split(";");
-      for (var i = 0; i < cookies.length; i++) {
-        var cookie = cookies[i];
-        var eqPos = cookie.indexOf("=");
-        var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-        var value = eqPos > -1 ? cookie.substr(eqPos + 1) : "";
-        document.cookie = name + "=" + value + "; path=/; max-age=86400"; // 1 day
-      }
-    } catch(e) {}
-  }
-  extendCookies();
-  setInterval(extendCookies, 60000);
+  (function () {
+    // 1. Cookie Persistence (1 Day)
+    function extendCookies() {
+      try {
+        var cookies = document.cookie.split(";");
+        for (var i = 0; i < cookies.length; i++) {
+          var cookie = cookies[i];
+          var eqPos = cookie.indexOf("=");
+          var name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+          var value = eqPos > -1 ? cookie.substr(eqPos + 1) : "";
+          document.cookie = name + "=" + value + "; path=/; max-age=86400"; // 1 day
+        }
+      } catch (e) { }
+    }
+    extendCookies();
+    setInterval(extendCookies, 60000);
 
-  // 2. Korean Visibility Styles
-  var style = document.createElement('style');
-  style.innerHTML = \`
+    // 2. Korean Visibility Styles
+    var style = document.createElement('style');
+    style.innerHTML = \`
     .sentenceBox.long .ko { opacity: 0 !important; transition: opacity 0.3s; }
     body.show-korean-always .sentenceBox.long .ko { opacity: 1 !important; }
   \`;
@@ -106,6 +111,8 @@ const INJECTED_JAVASCRIPT = `
 true;
 `;
 
+// 메인 App 컴포넌트 정의
+// 메인 App 컴포넌트 정의 (전역 상태 관리)
 export default function App() {
   const [isTtsEnabled, setIsTtsEnabled] = useState(true);
   const [isKoreanVisible, setIsKoreanVisible] = useState(false);
@@ -142,17 +149,18 @@ function MainApp({
   webViewRef
 }) {
   const insets = useSafeAreaInsets();
-  const fabBottom = Math.max(insets.bottom, 16) + 20; // Ensure at least some padding + user's 20-30
+  const fabBottom = Math.max(insets.bottom, 16) + 10; // Slight padding above navigation bar
+
 
   // Toggle Korean visibility
   useEffect(() => {
     if (webViewRef.current) {
       const jsCode = `
-        if (document && document.body) {
-           document.body.classList.toggle('show-korean-always', ${isKoreanVisible});
-        }
-        true;
-      `;
+    if (document && document.body) {
+       document.body.classList.toggle('show-korean-always', ${isKoreanVisible});
+    }
+    true;
+  `;
       webViewRef.current.injectJavaScript(jsCode);
     }
   }, [isKoreanVisible]);
@@ -287,7 +295,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F7FA', // Light Grey Background
   },
   banner: {
-    backgroundColor: '#047F89', // Etoos Blue Lagoon
+    backgroundColor: '#047F89',
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -352,5 +360,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 5,
   },
-});
+})
 
