@@ -1,8 +1,14 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, SafeAreaView, Platform, StatusBar, View, Text, TouchableOpacity, Linking } from 'react-native';
+// React와 React Native 기본 훅 및 컴포넌트 import
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+// 스타일, 상태바, 뷰, 텍스트, 터치, 링크, 백버튼 핸들러 import
+import { StyleSheet, Platform, StatusBar, View, Text, TouchableOpacity, Linking, BackHandler } from 'react-native';
+// 웹 페이지 표시를 위한 WebView import
 import { WebView } from 'react-native-webview';
+// 텍스트‑투‑스피치 기능을 위한 expo‑speech import
 import * as Speech from 'expo-speech';
+// SafeAreaContext를 이용해 노치·네비게이션 바와 겹치지 않게 함
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Optimized Injected JavaScript (Defined outside component)
 const INJECTED_JAVASCRIPT = `
@@ -34,12 +40,22 @@ const INJECTED_JAVASCRIPT = `
   // 2. TTS Logic & Debounce
   var lastReadText = "";
   var ttsTimeout = null;
+  var lastKoExists = -1; // -1: Unknown, 0: No, 1: Yes
   
   function isVisible(elem) {
       return !!( elem.offsetWidth || elem.offsetHeight || elem.getClientRects().length );
   }
 
   function checkAndSpeak() {
+    // Check for KO content presence
+    var koExists = !!document.querySelector('.sentenceBox.long .ko');
+    if (koExists !== (lastKoExists === 1)) {
+        lastKoExists = koExists ? 1 : 0;
+        if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'HAS_KO', exists: koExists }));
+        }
+    }
+
     var candidates = document.querySelectorAll('.sentenceBox.long .en, .wordBox span, .wordBox');
     var targetText = "";
 
@@ -93,8 +109,40 @@ true;
 export default function App() {
   const [isTtsEnabled, setIsTtsEnabled] = useState(true);
   const [isKoreanVisible, setIsKoreanVisible] = useState(false);
+  const [hasKoContent, setHasKoContent] = useState(false);
   const [currentUrl, setCurrentUrl] = useState('https://mword.etoos.com/main');
+  const [canGoBack, setCanGoBack] = useState(false);
   const webViewRef = useRef(null);
+
+  return (
+    <SafeAreaProvider>
+      <MainApp
+        isTtsEnabled={isTtsEnabled}
+        setIsTtsEnabled={setIsTtsEnabled}
+        isKoreanVisible={isKoreanVisible}
+        setIsKoreanVisible={setIsKoreanVisible}
+        hasKoContent={hasKoContent}
+        setHasKoContent={setHasKoContent}
+        currentUrl={currentUrl}
+        setCurrentUrl={setCurrentUrl}
+        canGoBack={canGoBack}
+        setCanGoBack={setCanGoBack}
+        webViewRef={webViewRef}
+      />
+    </SafeAreaProvider>
+  );
+}
+
+function MainApp({
+  isTtsEnabled, setIsTtsEnabled,
+  isKoreanVisible, setIsKoreanVisible,
+  hasKoContent, setHasKoContent,
+  currentUrl, setCurrentUrl,
+  canGoBack, setCanGoBack,
+  webViewRef
+}) {
+  const insets = useSafeAreaInsets();
+  const fabBottom = Math.max(insets.bottom, 16) + 20; // Ensure at least some padding + user's 20-30
 
   // Toggle Korean visibility
   useEffect(() => {
@@ -109,6 +157,24 @@ export default function App() {
     }
   }, [isKoreanVisible]);
 
+  // Handle Android Hardware Back Button
+  useEffect(() => {
+    const onBackPress = () => {
+      if (canGoBack && webViewRef.current) {
+        webViewRef.current.goBack();
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress
+    );
+
+    return () => backHandler.remove();
+  }, [canGoBack]);
+
   const handleMessage = (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -116,44 +182,46 @@ export default function App() {
         Speech.stop();
         Speech.speak(data.text, {
           language: 'en',
-          onError: (e) => console.log('Speech error:', e)
+          onError: (e) => {
+            if (__DEV__) console.log('Speech error:', e);
+          }
         });
+      } else if (data.type === 'HAS_KO') {
+        setHasKoContent(data.exists);
       }
     } catch (e) {
-      console.log('Message parse error:', e);
+      if (__DEV__) console.log('Message parse error:', e);
     }
+  };
+
+  const handleNavigationStateChange = (navState) => {
+    if (navState.url.includes('/testlist/teststart') && !currentUrl.includes('/testlist/teststart')) {
+      setIsKoreanVisible(false);
+      setIsTtsEnabled(true);
+      setHasKoContent(false);
+    }
+
+    setCurrentUrl(navState.url);
+    setCanGoBack(navState.canGoBack);
   };
 
   const handleShouldStartLoadWithRequest = (request) => {
     const { url } = request;
-    // Allow main domain, login domains, and OAuth providers
-    const allowedDomains = [
-      'etoos.com',
-      'apple.com',
-      'naver.com',
-      'google.com',
-      'kakao.com'
-    ];
-
+    const allowedDomains = ['etoos.com', 'apple.com', 'naver.com', 'google.com', 'kakao.com'];
     const isAllowed = allowedDomains.some(domain => url.includes(domain));
 
-    if (isAllowed) {
-      return true;
-    }
-
-    // Open external links in system browser
+    if (isAllowed) return true;
     Linking.openURL(url).catch((err) => console.error('An error occurred', err));
     return false;
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="light-content" backgroundColor="#047F89" />
 
-      {/* Top Banner */}
       {currentUrl === 'https://mword.etoos.com/main' && (
         <View style={styles.banner}>
-          <Text style={styles.bannerText}>영단태+ 앱으로 접속 중 (Unofficial-APP)</Text>
+          <Text style={styles.bannerText}>English Word Test Plus (Unofficial-APP)</Text>
         </View>
       )}
 
@@ -164,9 +232,12 @@ export default function App() {
         scalesPageToFit={true}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        cacheEnabled={true}
+        thirdPartyCookiesEnabled={true}
+        cacheMode="LOAD_DEFAULT"
         injectedJavaScript={INJECTED_JAVASCRIPT}
         onMessage={handleMessage}
-        onNavigationStateChange={(navState) => setCurrentUrl(navState.url)}
+        onNavigationStateChange={handleNavigationStateChange}
         onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
         sharedCookiesEnabled={true}
         userAgent="Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
@@ -175,18 +246,20 @@ export default function App() {
       {/* FABs - Only on Test Page */}
       {currentUrl && currentUrl.includes('/testlist/teststart') && (
         <>
-          <TouchableOpacity
-            style={[styles.fab, styles.fabLeft, isKoreanVisible ? styles.fabOn : styles.fabOff]}
-            onPress={() => setIsKoreanVisible(!isKoreanVisible)}
-          >
-            <Text style={styles.fabText}>{isKoreanVisible ? 'KO ON' : 'KO OFF'}</Text>
-          </TouchableOpacity>
+          {hasKoContent && (
+            <TouchableOpacity
+              onPress={() => setIsKoreanVisible(!isKoreanVisible)}
+              style={[styles.fab, styles.fabLeft, isKoreanVisible ? styles.fabOn : styles.fabOff, { bottom: fabBottom }]}
+            >
+              <Text style={styles.fabText}>{isKoreanVisible ? '한글 숨김' : '한글 표시'}</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
-            style={[styles.fab, styles.fabRight, isTtsEnabled ? styles.fabOn : styles.fabOff]}
             onPress={() => setIsTtsEnabled(!isTtsEnabled)}
+            style={[styles.fab, styles.fabRight, isTtsEnabled ? styles.fabOn : styles.fabOff, { bottom: fabBottom }]}
           >
-            <Text style={styles.fabText}>{isTtsEnabled ? 'TTS ON' : 'TTS OFF'}</Text>
+            <Text style={styles.fabText}>{isTtsEnabled ? 'TTS 끄기' : 'TTS 켜기'}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -194,7 +267,7 @@ export default function App() {
       {/* Return to Main Button - Only on generic Etoos pages */}
       {currentUrl && currentUrl.includes('m.etoos.com') && !currentUrl.includes('mword.etoos.com') && (
         <TouchableOpacity
-          style={[styles.fab, styles.fabCenter]}
+          style={[styles.fab, styles.fabCenter, { bottom: fabBottom }]}
           onPress={() => {
             if (webViewRef.current) {
               webViewRef.current.injectJavaScript("window.location.href = 'https://mword.etoos.com/main'; true;");
@@ -211,14 +284,18 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-    backgroundColor: '#fff',
+    backgroundColor: '#F5F7FA', // Light Grey Background
   },
   banner: {
-    backgroundColor: '#00B894',
-    paddingVertical: 10,
+    backgroundColor: '#047F89', // Etoos Blue Lagoon
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   bannerText: {
     color: 'white',
@@ -227,20 +304,20 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
+    backgroundColor: '#F5F7FA',
   },
   fab: {
     position: 'absolute',
-    bottom: 70, // Optimized position above nav bar
-    width: 80,
-    height: 50,
+    paddingHorizontal: 20,
+    height: 45,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 25,
-    elevation: 5,
+    borderRadius: 12,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   fabLeft: {
     left: 20,
@@ -249,21 +326,31 @@ const styles = StyleSheet.create({
     right: 20,
   },
   fabOn: {
-    backgroundColor: '#00B894',
+    backgroundColor: '#047F89', // Solid Blue Lagoon
   },
   fabOff: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#333333', // Solid Dark Grey
   },
   fabText: {
     color: 'white',
-    fontWeight: 'bold',
-    fontSize: 12,
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: -0.5,
   },
   fabCenter: {
     alignSelf: 'center',
-    bottom: 70, // Same level as others
-    width: 120, // Slightly wider for text
-    backgroundColor: '#FF7675', // Different color (Reddish)
+    width: 160,
+    height: 45,
+    borderRadius: 12,
+    backgroundColor: '#8B56FF', // Solid Heliotrope
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
 });
 
