@@ -11,30 +11,35 @@ jobs:
 
     steps:
       - name: 🏗 Setup repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: 🏗 Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18 # 프로젝트에 맞는 버전 사용
-          cache: 'npm' # or 'yarn'
+          node-version: 18
+          cache: 'npm'
 
       - name: 🏗 Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17' # React Native 최신 버전은 보통 17 필요
+          java-version: '17'
+
+      - name: 🏎️ Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: 📦 Install dependencies
         run: npm install
 
-      - name: 🚀 Install EAS CLI
-        run: npm install -g eas-cli
-
-      - name: 👷 Build APK (Local Build on Runner)
-        # 중요: --local 옵션을 써야 Expo 클라우드를 안 쓰고 GitHub 서버 자원을 씁니다.
-        # --non-interactive: CI 환경이라 사람이 입력을 못 하므로 필수
-        run: eas build --platform android --profile preview --local --non-interactive
+      - name: 👷 Build APK (Local Build)
+        run: npx eas build --platform android --profile production --local --non-interactive --output "./app-release.apk"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -42,6 +47,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: android/app/build/outputs/apk/release/app-release.apk
-          # 위 경로는 프로젝트 설정에 따라 다를 수 있습니다. 
-          # 보통 eas build --local 결과물은 프로젝트 루트에 생기거나 build 폴더 안을 확인해야 합니다.
+          path: ./app-release.apk
